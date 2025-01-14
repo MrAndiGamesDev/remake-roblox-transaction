@@ -220,11 +220,12 @@ def create_gui():
 
 # Auto-updater - Check for updates periodically
 async def check_for_updates_periodically():
-    while not shutdown_flag:
-        repo_owner = "MrAndiGamesDev"
-        repo_name = "remake-roblox-transaction"
-        api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases/latest"
+    current_version = "v1.0.0"  # Your current app version
+    repo_owner = "MrAndiGamesDev"
+    repo_name = "remake-roblox-transaction"
+    api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases/latest"
 
+    while not shutdown_flag:
         try:
             response = requests.get(api_url)
             response.raise_for_status()
@@ -232,10 +233,9 @@ async def check_for_updates_periodically():
             latest_version = latest_release["tag_name"]
             download_url = latest_release["assets"][0]["browser_download_url"]
 
-            current_version = "v1.0.0"
-
+            # Compare the current version with the latest version
             if latest_version != current_version:
-                logger.info(f"New version available: {latest_version}. Downloading update...")
+                logger.info(f"New version available: {latest_version}.")
                 # Show popup for update availability
                 if messagebox.askyesno("Update Available", f"A new version ({latest_version}) is available. Do you want to download it?"):
                     download_update(download_url)
@@ -244,25 +244,34 @@ async def check_for_updates_periodically():
         except requests.RequestException as e:
             logger.error(f"Error checking for updates: {e}")
 
-        await asyncio.sleep(10)  # Check every 10 seconds
-
 def download_update(url):
     try:
         # Download the update
+        logger.info("Downloading the latest update...")
         response = requests.get(url, stream=True)
         response.raise_for_status()
-        update_file_path = "robloxtransaction.py"
+        update_file_path = "robloxtransaction_updated.py"
+        
+        # Write the content to a new temporary file
         with open(update_file_path, 'wb') as update_file:
             for chunk in response.iter_content(chunk_size=8192):
                 update_file.write(chunk)
 
-        # Replace the old file with the new one
-        os.replace(update_file_path, "robloxtransaction.py")
-        logger.info("Update downloaded and applied.")
-        subprocess.Popen(["python", "robloxtransaction.py"])
-        sys.exit()
+        # Replace the old script with the updated script
+        logger.info("Update downloaded successfully. Replacing the old script...")
+        os.replace(update_file_path, "robloxtransaction.py")  # Replace old script with the new one
+
+        # Schedule the restart of the application
+        logger.info("Update applied. Restarting the application...")
+        asyncio.get_event_loop().call_later(2, restart_application)  # Wait for a moment before restarting
+        
     except requests.RequestException as e:
         logger.error(f"Error downloading update: {e}")
+
+def restart_application():
+    # Restart the application by executing the updated script
+    subprocess.Popen([sys.executable, "robloxtransaction.py"])
+    sys.exit()  # Exit the current instance of the script
 
 # Modify to include the update checker in the main loop
 def main():
