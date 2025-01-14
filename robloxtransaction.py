@@ -236,7 +236,9 @@ async def check_for_updates_periodically():
 
             if latest_version != current_version:
                 logger.info(f"New version available: {latest_version}. Downloading update...")
-                download_update(download_url)
+                # Show popup for update availability
+                if messagebox.askyesno("Update Available", f"A new version ({latest_version}) is available. Do you want to download it?"):
+                    download_update(download_url)
             else:
                 logger.info("You are already using the latest version.")
         except requests.RequestException as e:
