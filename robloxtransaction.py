@@ -245,33 +245,24 @@ async def check_for_updates_periodically():
             logger.error(f"Error checking for updates: {e}")
 
 def download_update(url):
+    import time
     try:
         # Download the update
-        logger.info("Downloading the latest update...")
         response = requests.get(url, stream=True)
         response.raise_for_status()
-        update_file_path = "robloxtransaction_updated.py"
-        
-        # Write the content to a new temporary file
+        update_file_path = "robloxtransaction.py"
         with open(update_file_path, 'wb') as update_file:
             for chunk in response.iter_content(chunk_size=8192):
                 update_file.write(chunk)
 
-        # Replace the old script with the updated script
-        logger.info("Update downloaded successfully. Replacing the old script...")
-        os.replace(update_file_path, "robloxtransaction.py")  # Replace old script with the new one
-
-        # Schedule the restart of the application
-        logger.info("Update applied. Restarting the application...")
-        asyncio.get_event_loop().call_later(2, restart_application)  # Wait for a moment before restarting
-        
+        # Replace the old file with the new one
+        os.replace(update_file_path, "robloxtransaction.py")
+        logger.info("Update downloaded and applied.")
+        time.sleep(3)
+        subprocess.Popen(["python", "robloxtransaction.py"])
+        sys.exit()
     except requests.RequestException as e:
         logger.error(f"Error downloading update: {e}")
-
-def restart_application():
-    # Restart the application by executing the updated script
-    subprocess.Popen([sys.executable, "robloxtransaction.py"])
-    sys.exit()  # Exit the current instance of the script
 
 # Modify to include the update checker in the main loop
 def main():
