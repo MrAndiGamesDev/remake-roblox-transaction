@@ -24,7 +24,7 @@ logger.add(sys.stdout, level="INFO")
 # Load environment variables
 load_dotenv()
 
-# Configuration
+# Configuration Constants
 AVATAR_URL = "https://img.icons8.com/plasticine/2x/robux.png"
 UPDATEEVERY = 60
 TIMEZONE = pytz.timezone("America/New_York")
@@ -50,19 +50,23 @@ signal.signal(signal.SIGINT, signal_handler)
 
 # Utility functions
 def load_json_data(filepath, default_data):
+    """Loads JSON data from a file, or returns the default data if the file doesn't exist."""
     if os.path.exists(filepath):
         with open(filepath, 'r') as file:
             return json.load(file)
     return default_data
 
 def save_json_data(filepath, data):
+    """Saves data to a JSON file."""
     with open(filepath, 'w') as file:
         json.dump(data, file, indent=4)
 
 def get_current_time():
+    """Returns the current time in the configured timezone."""
     return datetime.now(TIMEZONE).strftime('%m/%d/%Y %I:%M:%S %p')
 
 async def send_discord_notification(embed):
+    """Sends a Discord notification with the provided embed."""
     payload = {
         "embeds": [embed],
         "username": "Roblox Monitor",
@@ -78,6 +82,7 @@ async def send_discord_notification(embed):
             logger.error(f"Error sending notification: {e}")
 
 async def fetch_data(url):
+    """Fetches data from a given URL."""
     retries = 3
     async with aiohttp.ClientSession() as session:
         for _ in range(retries):
@@ -91,13 +96,16 @@ async def fetch_data(url):
     return None
 
 async def fetch_transaction_data():
+    """Fetches transaction data."""
     return await fetch_data(TRANSACTION_API_URL)
 
 async def fetch_robux_balance():
+    """Fetches the current Robux balance."""
     response = await fetch_data(CURRENCY_API_URL)
     return response.get("robux", 0) if response else 0
 
 async def monitor(gui_vars):
+    """Main monitoring loop that checks for changes in transactions and Robux balance."""
     last_transaction_data = load_json_data(TRANSACTION_DATA_PATH, {})
     last_robux_balance = load_json_data(ROBUX_BALANCE_PATH, {"robux": 0})
 
@@ -110,48 +118,56 @@ async def monitor(gui_vars):
 
             gui_vars["robux_balance"].set(f"Current Robux Balance: {current_robux_balance}")
 
-            if current_transaction_data:
-                changes = {
-                    key: (last_transaction_data.get(key, 0), current_transaction_data[key])
-                    for key in current_transaction_data if current_transaction_data[key] != last_transaction_data.get(key, 0)
-                }
-
-                if changes:
-                    await send_discord_notification({
-                        "title": "\U0001F514 Roblox Transaction Update",
-                        "description": "Transaction changes detected.",
-                        "fields": [
-                            {"name": key, "value": f"**{old}** -> **{new}**", "inline": False}
-                            for key, (old, new) in changes.items()
-                        ],
-                        "color": 720640,
-                        "footer": {"text": f"Detected at {get_current_time()}"}
-                    })
-                    last_transaction_data.update(current_transaction_data)
-                    save_json_data(TRANSACTION_DATA_PATH, last_transaction_data)
-
-            robux_change = current_robux_balance - last_robux_balance["robux"]
-            if robux_change != 0:
-                change_type = "gained" if robux_change > 0 else "spent"
-                color = 0x00FF00 if robux_change > 0 else 0xFF0000
-                await send_discord_notification({
-                    "title": "\U0001F4B8 Robux Balance Update",
-                    "description": f"You have {change_type} Robux.",
-                    "fields": [
-                        {"name": "Previous Balance", "value": f"**{last_robux_balance['robux']}**", "inline": True},
-                        {"name": "Current Balance", "value": f"**{current_robux_balance}**", "inline": True},
-                        {"name": "Change", "value": f"**{'+' if robux_change > 0 else ''}{robux_change}**", "inline": True}
-                    ],
-                    "color": color,
-                    "footer": {"text": f"Detected at {get_current_time()}"}
-                })
-                last_robux_balance["robux"] = current_robux_balance
-                save_json_data(ROBUX_BALANCE_PATH, last_robux_balance)
+            await process_transaction_changes(last_transaction_data, current_transaction_data)
+            await process_robux_balance_change(last_robux_balance, current_robux_balance)
 
             bar()
             await asyncio.sleep(UPDATEEVERY)
 
+async def process_transaction_changes(last_transaction_data, current_transaction_data):
+    """Processes changes in transaction data."""
+    if current_transaction_data:
+        changes = {
+            key: (last_transaction_data.get(key, 0), current_transaction_data[key])
+            for key in current_transaction_data if current_transaction_data[key] != last_transaction_data.get(key, 0)
+        }
+
+        if changes:
+            await send_discord_notification({
+                "title": "\U0001F514 Roblox Transaction Update",
+                "description": "Transaction changes detected.",
+                "fields": [
+                    {"name": key, "value": f"**{old}** -> **{new}**", "inline": False}
+                    for key, (old, new) in changes.items()
+                ],
+                "color": 720640,
+                "footer": {"text": f"Detected at {get_current_time()}"}
+            })
+            last_transaction_data.update(current_transaction_data)
+            save_json_data(TRANSACTION_DATA_PATH, last_transaction_data)
+
+async def process_robux_balance_change(last_robux_balance, current_robux_balance):
+    """Processes changes in the Robux balance."""
+    robux_change = current_robux_balance - last_robux_balance["robux"]
+    if robux_change != 0:
+        change_type = "gained" if robux_change > 0 else "spent"
+        color = 0x00FF00 if robux_change > 0 else 0xFF0000
+        await send_discord_notification({
+            "title": "\U0001F4B8 Robux Balance Update",
+            "description": f"You have {change_type} Robux.",
+            "fields": [
+                {"name": "Previous Balance", "value": f"**{last_robux_balance['robux']}**", "inline": True},
+                {"name": "Current Balance", "value": f"**{current_robux_balance}**", "inline": True},
+                {"name": "Change", "value": f"**{'+' if robux_change > 0 else ''}{robux_change}**", "inline": True}
+            ],
+            "color": color,
+            "footer": {"text": f"Detected at {get_current_time()}"}
+        })
+        last_robux_balance["robux"] = current_robux_balance
+        save_json_data(ROBUX_BALANCE_PATH, last_robux_balance)
+
 def start_monitoring(gui_vars):
+    """Starts the monitoring thread."""
     global DISCORD_WEBHOOK_URL, USERID, COOKIES, TRANSACTION_API_URL, CURRENCY_API_URL, monitoring_thread
 
     DISCORD_WEBHOOK_URL = gui_vars["discord_webhook"].get()
@@ -161,7 +177,7 @@ def start_monitoring(gui_vars):
     TRANSACTION_API_URL = f"https://economy.roblox.com/v2/users/{USERID}/transaction-totals?timeFrame=Year&transactionType=summary"
     CURRENCY_API_URL = f"https://economy.roblox.com/v1/users/{USERID}/currency"
 
-    if not DISCORD_WEBHOOK_URL or not USERID or not COOKIES[".ROBLOSECURITY"]:
+    if not all([DISCORD_WEBHOOK_URL, USERID, COOKIES[".ROBLOSECURITY"]]):
         messagebox.showerror("Error", "Please fill in all the fields!")
         return
 
@@ -172,6 +188,7 @@ def start_monitoring(gui_vars):
     monitoring_thread.start()
 
 def create_gui():
+    """Creates the GUI for the application."""
     root = tk.Tk()
     root.title("Roblox Monitoring")
 
@@ -182,6 +199,7 @@ def create_gui():
         "roblox_cookies": tk.StringVar()
     }
 
+    # GUI Elements
     tk.Label(root, text="Discord Webhook URL").pack(pady=5)
     tk.Entry(root, textvariable=gui_vars["discord_webhook"], width=50).pack(pady=5)
 
@@ -214,6 +232,7 @@ def create_gui():
     root.mainloop()
 
 async def check_for_updates_periodically():
+    """Periodically checks for updates from GitHub releases."""
     current_version = "v0.1.0"  # Your current version
     repo_owner = "MrAndiGamesDev"
     repo_name = "remake-roblox-transaction"
@@ -228,8 +247,7 @@ async def check_for_updates_periodically():
             latest_version = latest_release["tag_name"].strip()  # Make sure to strip spaces
             download_url = latest_release["assets"][0]["browser_download_url"]
 
-            # Use semver to compare versions properly
-            if semver.compare(latest_version, current_version) > 0:  # If the latest version is greater
+            if semver.compare(latest_version, current_version) > 0:
                 logger.info(f"New version available: {latest_version}.")
                 if messagebox.askyesno("Update Available", f"A new version ({latest_version}) is available. Do you want to download it?"):
                     download_update(download_url)
@@ -242,6 +260,7 @@ async def check_for_updates_periodically():
             logger.error(f"Error checking for updates: {e}")
 
 def download_update(url):
+    """Downloads and applies the update."""
     try:
         response = requests.get(url, stream=True)
         response.raise_for_status()
