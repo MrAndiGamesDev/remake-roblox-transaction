@@ -6,19 +6,20 @@ import requests
 import sys
 import json
 import subprocess
-from datetime import datetime
 import pytz
-from dotenv import load_dotenv
+import semver
 import tkinter as tk
+from datetime import datetime
+from dotenv import load_dotenv
 from tkinter import messagebox
 from threading import Thread
 from alive_progress import alive_bar
-from loguru import logger  # Importing loguru
+from loguru import logger
 
 # Configure logger
-logger.remove()  # Remove the default logger
-logger.add("roblox_monitor.log", level="DEBUG", rotation="1 MB", compression="zip")  # Log to file with rotation
-logger.add(sys.stdout, level="INFO")  # Log to console with INFO level
+logger.remove()
+logger.add("roblox_monitor.log", level="DEBUG", rotation="1 MB", compression="zip")
+logger.add(sys.stdout, level="INFO")
 
 # Load environment variables
 load_dotenv()
@@ -150,7 +151,6 @@ async def monitor(gui_vars):
             bar()
             await asyncio.sleep(UPDATEEVERY)
 
-# Modify start_monitoring to allow the stop process without quitting the GUI
 def start_monitoring(gui_vars):
     global DISCORD_WEBHOOK_URL, USERID, COOKIES, TRANSACTION_API_URL, CURRENCY_API_URL, monitoring_thread
 
@@ -165,15 +165,12 @@ def start_monitoring(gui_vars):
         messagebox.showerror("Error", "Please fill in all the fields!")
         return
 
-    # Create a new event loop and start the monitoring
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    # Start the monitoring loop in a separate thread
     monitoring_thread = Thread(target=lambda: loop.run_until_complete(monitor(gui_vars)))
     monitoring_thread.start()
 
-# Modify create_gui to handle the "Stop Monitoring" button without quitting the app
 def create_gui():
     root = tk.Tk()
     root.title("Roblox Monitoring")
@@ -198,16 +195,14 @@ def create_gui():
 
     tk.Button(root, text="Start Monitoring", command=lambda: Thread(target=start_monitoring, args=(gui_vars,)).start()).pack(pady=10)
 
-    # Stop Monitoring button should only stop monitoring, not quit
     def stop_monitoring():
         global shutdown_flag, monitoring_thread
         shutdown_flag = True
         if monitoring_thread:
-            monitoring_thread.join()  # Wait for the monitoring thread to finish
+            monitoring_thread.join()
 
     tk.Button(root, text="Stop Monitoring", command=stop_monitoring).pack(pady=10)
 
-    # Check for updates manually
     def check_for_updates():
         logger.info("Checking for updates...")
         loop = asyncio.new_event_loop()
@@ -218,9 +213,8 @@ def create_gui():
 
     root.mainloop()
 
-# Auto-updater - Check for updates periodically
 async def check_for_updates_periodically():
-    current_version = "v1.0.0"  # Your current app version
+    current_version = "v0.1.0"  # Your current version
     repo_owner = "MrAndiGamesDev"
     repo_name = "remake-roblox-transaction"
     api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases/latest"
@@ -230,25 +224,25 @@ async def check_for_updates_periodically():
             response = requests.get(api_url)
             response.raise_for_status()
             latest_release = response.json()
-            latest_version = latest_release["tag_name"]
+
+            latest_version = latest_release["tag_name"].strip()  # Make sure to strip spaces
             download_url = latest_release["assets"][0]["browser_download_url"]
 
-            # Compare the current version with the latest version
-            if latest_version != current_version:
+            # Use semver to compare versions properly
+            if semver.compare(latest_version, current_version) > 0:  # If the latest version is greater
                 logger.info(f"New version available: {latest_version}.")
-                # Show popup for update availability
                 if messagebox.askyesno("Update Available", f"A new version ({latest_version}) is available. Do you want to download it?"):
                     download_update(download_url)
+                else:
+                    logger.info("User chose not to download the update.")
             else:
                 logger.info("You are already using the latest version.")
-                # Show popup indicating that the user is on the latest version
                 messagebox.showinfo("No Updates", "You are already using the latest version of the application.")
         except requests.RequestException as e:
             logger.error(f"Error checking for updates: {e}")
 
 def download_update(url):
     try:
-        # Download the update
         response = requests.get(url, stream=True)
         response.raise_for_status()
         update_file_path = "robloxtransaction.py"
@@ -256,19 +250,16 @@ def download_update(url):
             for chunk in response.iter_content(chunk_size=8192):
                 update_file.write(chunk)
 
-        # Replace the old file with the new one
         os.replace(update_file_path, "robloxtransaction.py")
         logger.info("Update downloaded and applied.")
-        asyncio.sleep(3)
         subprocess.Popen(["python", "robloxtransaction.py"])
         sys.exit()
     except requests.RequestException as e:
         logger.error(f"Error downloading update: {e}")
 
-# Modify to include the update checker in the main loop
 def main():
     loop = asyncio.get_event_loop()
-    loop.create_task(check_for_updates_periodically())  # Start periodic update check
+    loop.create_task(check_for_updates_periodically())
     create_gui()
 
 if __name__ == "__main__":
