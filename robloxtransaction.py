@@ -241,11 +241,12 @@ async def check_for_updates_periodically():
                     download_update(download_url)
             else:
                 logger.info("You are already using the latest version.")
+                # Show popup indicating that the user is on the latest version
+                messagebox.showinfo("No Updates", "You are already using the latest version of the application.")
         except requests.RequestException as e:
             logger.error(f"Error checking for updates: {e}")
 
 def download_update(url):
-    import time
     try:
         # Download the update
         response = requests.get(url, stream=True)
@@ -258,7 +259,7 @@ def download_update(url):
         # Replace the old file with the new one
         os.replace(update_file_path, "robloxtransaction.py")
         logger.info("Update downloaded and applied.")
-        time.sleep(3)
+        asyncio.sleep(3)
         subprocess.Popen(["python", "robloxtransaction.py"])
         sys.exit()
     except requests.RequestException as e:
